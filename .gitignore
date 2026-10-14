@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Test leftovers
+quickmenu-test-*/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS
+.DS_Store

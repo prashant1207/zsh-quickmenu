@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in the menu doesn't work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. The details below usually make the difference between a quick fix and a long guessing game.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I pressed Ctrl-G and picked "Launch Xcode project", and ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: The relevant part of your menu config
+      description: The item(s) involved. Please remove anything private.
+      render: ini
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Output of `zsh --version`, your OS and terminal, and `qm --config`.
+      render: text
+      placeholder: |
+        zsh 5.9 (arm64-apple-darwin24.0)
+        macOS 15.1, iTerm2 3.5
+        $ qm --config
+        loaded, in order:
+          /Users/me/.config/quickmenu/menu.conf
+    validations:
+      required: true
+
+  - type: dropdown
+    id: picker
+    attributes:
+      label: Which picker?
+      options:
+        - built-in TUI (default)
+        - fzf (QUICKMENU_USE_FZF=1)
+        - numbered fallback (TERM=dumb)
+        - not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I'm on the latest version of the plugin
+        - label: I ran `python3 tests/run_tests.py` and noted whether it passes

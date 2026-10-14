@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a menu capability, setting or config option
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow, not the implementation. What command do you keep forgetting?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like?
+      description: A config snippet, a key binding, a CLI flag — whatever fits.
+      render: ini
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you tried already?
+      description: Existing settings, placeholders or a `menu.zsh` workaround.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This works without adding a required dependency (or degrades gracefully when one is missing)

@@ -1,0 +1,91 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Versions
+        run: |
+          zsh --version
+          python3 --version
+          jq --version || echo "jq not installed (python3 fallback will be used)"
+
+      - name: Run the test suite
+        env:
+          # CI runners are slower than a laptop; stretch the pty timings.
+          QM_TEST_DELAY: '2'
+          LANG: C.UTF-8
+        run: python3 tests/run_tests.py
+
+  test-no-jq:
+    name: ubuntu-latest (without jq)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh and remove jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
+          sudo rm -f "$(command -v jq)" || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run the test suite
+        env:
+          QM_TEST_DELAY: '2'
+          LANG: C.UTF-8
+        run: python3 tests/run_tests.py
+
+  lint:
+    name: shell syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
+
+      - name: Check every zsh file parses
+        run: |
+          status=0
+          for f in quickmenu.plugin.zsh lib/*.zsh examples/menu.zsh install.sh; do
+            if zsh -n "$f"; then
+              echo "ok    $f"
+            else
+              echo "FAIL  $f"
+              status=1
+            fi
+          done
+          exit $status
