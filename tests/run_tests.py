@@ -77,13 +77,19 @@ class Sandbox:
 
     def env(self, **extra) -> dict:
         env = dict(os.environ)
+        # Anything the developer (or a CI runner) has set must not leak in.
+        # GitHub's Ubuntu images set XDG_CONFIG_HOME, which would send the
+        # plugin to the real config directory instead of the sandbox.
+        for key in list(env):
+            if key.startswith("QUICKMENU_") or key.startswith("XDG_"):
+                del env[key]
         env.update(
             HOME=self.home,
+            XDG_CONFIG_HOME=os.path.join(self.home, ".config"),
             TERM="xterm-256color",
             QUICKMENU_NO_COLOR="1",
             ZDOTDIR=self.home,
         )
-        env.pop("QUICKMENU_PICKER", None)
         env.update(extra)
         return env
 
@@ -177,6 +183,15 @@ UP, DOWN, ENTER, ESC, TAB = b"\x1b[A", b"\x1b[B", b"\r", b"\x1b", b"\t"
 
 def main() -> int:
     print("zsh-quickmenu test suite\n")
+
+    # Nothing in the suite may touch the real config directory. If an
+    # environment variable leaks into a sandbox the plugin writes its starter
+    # menu here, and every assertion about menu contents becomes meaningless.
+    real_cfg = os.path.join(
+        os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config"),
+        "quickmenu",
+    )
+    real_cfg_before = sorted(os.listdir(real_cfg)) if os.path.isdir(real_cfg) else None
 
     # ---------------------------------------------------------------- basics
     print("config + listing")
@@ -406,10 +421,18 @@ def main() -> int:
         rc, screen = zsh_pty(sb, script, [b"d", b"a", b"n", ENTER, b"y", b"\r"])
         check("-y proceeds on 'y'", result() == "echo boom", result() + "\n" + screen[-400:])
 
-        # terminal is restored afterwards
-        rc, screen = zsh_pty(sb, "quickmenu --print > /dev/null; stty -a | head -1", [ENTER])
-        check("terminal mode is restored (echo back on)", " echo" in screen and "-echo" not in screen,
-              screen[-400:])
+        # The terminal must be handed back in its original state. Check the
+        # flags by name - "-echo" is a substring of "-echonl", and the first
+        # line of `stty -a` differs between GNU and BSD, so neither is reliable.
+        probe = (
+            "quickmenu --print > /dev/null; "
+            "flags=$(stty -a | tr -s ' \\t;' '\\n'); "
+            "print -r -- \"echo:$(print -r -- $flags | grep -cx echo) \""
+            "\"icanon:$(print -r -- $flags | grep -cx icanon)\""
+        )
+        rc, screen = zsh_pty(sb, probe, [ENTER])
+        check("terminal echo is restored", "echo:1" in screen, screen[-400:])
+        check("canonical mode is restored", "icanon:1" in screen, screen[-400:])
     finally:
         sb.close()
 
@@ -816,6 +839,12 @@ Regrouped = echo regrouped
               screen[-600:])
     finally:
         sb.close()
+
+    print("\nisolation")
+    real_cfg_after = sorted(os.listdir(real_cfg)) if os.path.isdir(real_cfg) else None
+    check("the suite never touched the real config directory",
+          real_cfg_after == real_cfg_before,
+          f"{real_cfg}\n  before: {real_cfg_before}\n  after:  {real_cfg_after}")
 
     print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     if FAIL:

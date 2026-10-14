@@ -104,9 +104,19 @@ Each of these was a real bug. Don't reintroduce them.
 
 Rules that keep the suite honest:
 
+- **Sandboxes must be hermetic.** `Sandbox.env()` strips every inherited
+  `QUICKMENU_*` and `XDG_*` variable and points both `HOME` and
+  `XDG_CONFIG_HOME` at the sandbox. GitHub's Ubuntu images set
+  `XDG_CONFIG_HOME` (macOS ones don't) — without this the plugin reads the
+  *real* config directory, every assertion about menu contents becomes
+  meaningless, and the suite writes its starter menu into the developer's own
+  `~/.config`. The final `isolation` check fails loudly if that happens again.
 - **Assert on the result, not the screen.** pty tests write the chosen command to
   a file (`quickmenu --print > out.txt`) and assert on that. Screen text is only
   for checking that something rendered at all — never parse ANSI.
+- **Check terminal flags by name.** `stty -a`'s first line differs between GNU
+  and BSD, and `-echo` is a substring of `-echonl`. Split on whitespace and
+  match whole words (`grep -cx echo`).
 - Use `Sandbox(configs={...})` for `.conf`/`.json` and `Sandbox(menu=...)` for the
   zsh format. Each sandbox gets its own `HOME`, so tests can't see each other.
 - Timings are multiplied by `QM_TEST_DELAY`. Never hardcode a `sleep`.
