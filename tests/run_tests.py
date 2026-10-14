@@ -109,8 +109,13 @@ def zsh(sandbox: Sandbox, script: str, **env) -> subprocess.CompletedProcess:
 
 
 def zsh_pty(sandbox: Sandbox, script: str, keys: list[bytes], *, timeout: float = 15.0,
-            argv: list[str] | None = None, settle: float = 0.9, **env):
-    """Run a zsh snippet attached to a pty and feed it keystrokes."""
+            argv: list[str] | None = None, settle: float = 0.9,
+            ready: bytes | None = None, **env):
+    """Run a zsh snippet attached to a pty and feed it keystrokes.
+
+    `ready` is a marker to wait for before typing; without it the first
+    keystroke is sent after a fixed `settle` and can be lost on a slow runner.
+    """
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
 
@@ -135,9 +140,11 @@ def zsh_pty(sandbox: Sandbox, script: str, keys: list[bytes], *, timeout: float 
 
     captured = bytearray()
 
-    def drain(seconds: float) -> None:
+    def drain(seconds: float, until: bytes | None = None) -> None:
         end = time.time() + seconds
         while time.time() < end:
+            if until is not None and until in captured:
+                return
             try:
                 r, _, _ = select.select([master], [], [], 0.05)
                 if r:
@@ -148,7 +155,11 @@ def zsh_pty(sandbox: Sandbox, script: str, keys: list[bytes], *, timeout: float 
             except OSError:
                 return
 
-    drain(settle * DELAY)  # let the menu draw
+    if ready is not None:
+        drain(10.0 * DELAY, until=ready)
+        drain(0.2 * DELAY)
+    else:
+        drain(settle * DELAY)  # let the menu draw
     for key in keys:
         if proc.poll() is not None:
             break
@@ -812,29 +823,35 @@ Regrouped = echo regrouped
                 "unsetopt zle_rprompt_indent 2>/dev/null\n"
                 f"source {PLUGIN}\n"
             )
-        interactive = ["zsh", "-i"]
+        # -d (--no-globalrcs) keeps /etc/zsh/zshrc out of the sandbox. Ubuntu's
+        # runs compinit for every interactive shell, and on a GitHub runner
+        # compaudit finds an insecure directory, so it stops to ask
+        # "Ignore insecure directories and continue [y] or abort compinit [n]?"
+        # — and that read swallows the Ctrl-G that should open the menu.
+        interactive = ["zsh", "-d", "-i"]
+        prompt = b"PROMPT> "
 
         rc, screen = zsh_pty(sb, "", [b"\x07", b"\r", b"exit\r"],
-                             argv=interactive, settle=1.5)
+                             argv=interactive, ready=prompt)
         check("ctrl-g opens the menu", "quickmenu" in screen, screen[-600:])
         check("widget runs the chosen command", "hello-widget" in screen, screen[-600:])
         check("command lands on the prompt line", "print hello-widget" in screen, screen[-600:])
 
         rc, screen = zsh_pty(sb, "", [b"\x07", DOWN, b"\r", b"exit\r"],
-                             argv=interactive, settle=1.5)
+                             argv=interactive, ready=prompt)
         check("widget honours navigation", "bye-widget" in screen, screen[-600:])
 
         rc, screen = zsh_pty(sb, "", [b"\x07", TAB, b"\r", b"exit\r"],
-                             argv=interactive, settle=1.5)
+                             argv=interactive, ready=prompt)
         check("tab leaves the command editable on the prompt",
               "print hello-widget" in screen and "hello-widget\r\n" in screen, screen[-600:])
 
         rc, screen = zsh_pty(sb, "", [b"\x07", ESC, b"print back-at-prompt\r", b"exit\r"],
-                             argv=interactive, settle=1.5)
+                             argv=interactive, ready=prompt)
         check("esc returns to a usable prompt", "back-at-prompt" in screen, screen[-600:])
 
         rc, screen = zsh_pty(sb, "", [b"\x07", b"\r", b"print -r -- $history[$((HISTCMD-1))]\r", b"exit\r"],
-                             argv=interactive, settle=1.5)
+                             argv=interactive, ready=prompt)
         check("the command is recorded in history", screen.count("print hello-widget") >= 2,
               screen[-600:])
     finally:

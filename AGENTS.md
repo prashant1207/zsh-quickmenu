@@ -111,6 +111,18 @@ Rules that keep the suite honest:
   *real* config directory, every assertion about menu contents becomes
   meaningless, and the suite writes its starter menu into the developer's own
   `~/.config`. The final `isolation` check fails loudly if that happens again.
+- **Interactive tests must skip the global rc files.** The widget tests run
+  `zsh -d -i` so only the sandbox's `.zshrc` is read. Ubuntu's
+  `/etc/zsh/zshrc` runs `compinit` for every interactive shell; on a GitHub
+  runner `compaudit` finds an insecure directory, so it stops at
+  `Ignore insecure directories and continue [y] or abort compinit [n]?` and
+  that read eats the `Ctrl-G` meant for the menu. macOS has no such prompt, so
+  this only ever fails on Linux. `-f` already implies it for the
+  non-interactive tests.
+- **Wait for the shell, don't guess.** `zsh_pty(..., ready=b'PROMPT> ')` holds
+  the first keystroke until that marker is on screen. A keystroke sent before
+  anything is listening is simply lost, and the first one is the one that opens
+  the menu.
 - **Assert on the result, not the screen.** pty tests write the chosen command to
   a file (`quickmenu --print > out.txt`) and assert on that. Screen text is only
   for checking that something rendered at all — never parse ANSI.
