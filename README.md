@@ -211,7 +211,8 @@ Every file below is loaded if it exists, in this order. Mix and match freely.
 ### JSON
 
 Good when something else generates your menu. Read with `jq`, falling back to
-`python3`. Either a bare array or `{"items": [...]}` works.
+`python3` — set `QUICKMENU_JSON=jq` or `QUICKMENU_JSON=python3` to pin one.
+Either a bare array or `{"items": [...]}` works.
 
 ```json
 {
@@ -284,6 +285,7 @@ the ownership checks.
 | `QUICKMENU_LOCAL_FILE` | unset | look for only this project filename |
 | `QUICKMENU_PICKER` | `auto` | `tui`, `fzf` or `dumb` |
 | `QUICKMENU_USE_FZF` | unset | set to use fzf when installed |
+| `QUICKMENU_JSON` | `auto` | JSON backend: `auto`, `jq` or `python3` |
 | `QUICKMENU_NO_COLOR` | unset | plain output |
 | `QUICKMENU_QUIET` | unset | don't echo the command before running |
 | `QUICKMENU_UNSAFE_CONFIG` | unset | skip config ownership checks |

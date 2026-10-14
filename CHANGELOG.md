@@ -21,7 +21,8 @@ First public release.
 - Three config formats, all loaded when present:
   - `menu.conf` — `Label = command` with `[section]` groups and `.if`,
     `.desc`, `.group`, `.confirm`, `.edit` settings.
-  - `menu.json` — read with `jq`, falling back to `python3`.
+  - `menu.json` — read with `jq`, falling back to `python3`; pin one with
+    `QUICKMENU_JSON`.
   - `menu.zsh` — `qm_item` / `qm_git_item` for menus built at runtime.
 - Extra snippets from `menu.d/*.{conf,json,zsh}`.
 - Project-local menus: `.quickmenu.{conf,json,zsh}`, searched upwards from

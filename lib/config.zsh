@@ -153,25 +153,21 @@ _qm_parse_conf() {
 # Accepts either [ {...}, {...} ] or { "items": [ {...} ] }.
 # Each object: label/name, run/command/cmd, group, desc/description,
 #              if/condition, confirm, edit.
-_qm_json_to_stream() {
-  local file=$1
+_qm_json_jq() {
+  command jq -j -r '
+    (if type == "array" then . elif has("items") then .items else [.] end)[]
+    | ( (.label // .name // ""),         "\u001f",
+        (.run // .command // .cmd // ""), "\u001f",
+        (.group // ""),                   "\u001f",
+        (.desc // .description // ""),    "\u001f",
+        (.if // .condition // ""),        "\u001f",
+        ( (if (.confirm // false) then "y" else "" end)
+        + (if (.edit    // false) then "e" else "" end) ), "\u001f" )
+  ' -- "$1"
+}
 
-  if (( ${+commands[jq]} )); then
-    command jq -j -r '
-      (if type == "array" then . elif has("items") then .items else [.] end)[]
-      | ( (.label // .name // ""),         "\u001f",
-          (.run // .command // .cmd // ""), "\u001f",
-          (.group // ""),                   "\u001f",
-          (.desc // .description // ""),    "\u001f",
-          (.if // .condition // ""),        "\u001f",
-          ( (if (.confirm // false) then "y" else "" end)
-          + (if (.edit    // false) then "e" else "" end) ), "\u001f" )
-    ' -- "$file" && return 0
-    return 1
-  fi
-
-  if (( ${+commands[python3]} )); then
-    command python3 - "$file" <<'PY' && return 0
+_qm_json_python() {
+  command python3 - "$1" <<'PY'
 import json, sys
 with open(sys.argv[1]) as fh:
     data = json.load(fh)
@@ -192,11 +188,48 @@ for it in data:
     ]
 sys.stdout.write("".join(f + "\x1f" for f in out))
 PY
-    return 1
-  fi
+}
 
-  print -ru2 -- "quickmenu: reading ${file} needs jq or python3"
-  return 1
+# Emit the \x1f-delimited field stream for a JSON config.
+# QUICKMENU_JSON picks the backend: auto (default), jq, or python3.
+_qm_json_to_stream() {
+  local file=$1
+  local backend=${QUICKMENU_JSON:-auto}
+
+  case ${(L)backend} in
+    jq)
+      if (( ! ${+commands[jq]} )); then
+        print -ru2 -- "quickmenu: QUICKMENU_JSON=jq, but jq is not installed"
+        return 1
+      fi
+      _qm_json_jq "$file"
+      return $?
+      ;;
+    python|python3)
+      if (( ! ${+commands[python3]} )); then
+        print -ru2 -- "quickmenu: QUICKMENU_JSON=${backend}, but python3 is not installed"
+        return 1
+      fi
+      _qm_json_python "$file"
+      return $?
+      ;;
+    auto)
+      if (( ${+commands[jq]} )); then
+        _qm_json_jq "$file"
+        return $?
+      fi
+      if (( ${+commands[python3]} )); then
+        _qm_json_python "$file"
+        return $?
+      fi
+      print -ru2 -- "quickmenu: reading ${file} needs jq or python3"
+      return 1
+      ;;
+    *)
+      print -ru2 -- "quickmenu: unknown QUICKMENU_JSON backend '${backend}' (use auto, jq or python3)"
+      return 1
+      ;;
+  esac
 }
 
 _qm_parse_json() {

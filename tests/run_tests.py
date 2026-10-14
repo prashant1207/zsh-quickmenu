@@ -548,16 +548,14 @@ Regrouped = echo regrouped
 }"""
     JSON_ARR = '[{"label": "From array", "command": "echo arr"}]'
 
-    for backend, extra in (("jq", {}), ("python3", {"QUICKMENU_NO_JQ": "1"})):
+    for backend, extra in (("jq", {"QUICKMENU_JSON": "jq"}),
+                           ("python3", {"QUICKMENU_JSON": "python3"})):
+        if backend == "jq" and not shutil.which("jq"):
+            print("  skip  .json via jq (jq not installed)")
+            continue
         sb = Sandbox(configs={"menu.json": JSON_OBJ}, git=True)
         try:
             env = dict(extra)
-            if backend == "python3":
-                # hide jq from the shell
-                env["PATH"] = ":".join(
-                    p for p in sb.env()["PATH"].split(":")
-                    if not os.path.exists(os.path.join(p, "jq"))
-                )
             r = zsh(sb, "quickmenu --list", **env)
             check(f".json items load ({backend})", "open: Launch Code" in r.stdout,
                   r.stdout + r.stderr)
@@ -571,6 +569,28 @@ Regrouped = echo regrouped
                   r.stdout.strip() == "echo described", r.stdout + r.stderr)
         finally:
             sb.close()
+
+    # Both backends must produce byte-identical field streams.
+    if shutil.which("jq"):
+        sb = Sandbox(configs={"menu.json": JSON_OBJ})
+        try:
+            dump = "_qm_json_to_stream " + repr(os.path.join(sb.cfg, "menu.json")) + " | od -c"
+            a = zsh(sb, dump, QUICKMENU_JSON="jq")
+            b = zsh(sb, dump, QUICKMENU_JSON="python3")
+            check("jq and python3 backends agree byte for byte",
+                  a.stdout == b.stdout and a.returncode == 0 and b.returncode == 0,
+                  "jq:\n" + a.stdout[:600] + "\npython3:\n" + b.stdout[:600])
+        finally:
+            sb.close()
+
+    sb = Sandbox(configs={"menu.json": JSON_OBJ})
+    try:
+        r = zsh(sb, "quickmenu --list", QUICKMENU_JSON="nonsense")
+        check("QUICKMENU_JSON rejects an unknown backend",
+              r.returncode != 0 and "unknown QUICKMENU_JSON" in r.stderr,
+              r.stdout + r.stderr)
+    finally:
+        sb.close()
 
     sb = Sandbox(configs={"menu.json": JSON_ARR})
     try:

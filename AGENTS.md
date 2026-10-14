@@ -129,7 +129,14 @@ Say you're adding `.icon`. You need to touch:
 6. `CHANGELOG.md` under `Unreleased`.
 
 Forgetting the python3 JSON branch is the usual mistake; it only shows up on a
-machine without `jq`.
+machine without `jq`. The suite guards this by running both backends
+(`QUICKMENU_JSON=jq` / `QUICKMENU_JSON=python3`) and asserting their field
+streams are byte-identical — so add your field to both or that check fails.
+
+**Never select a backend by editing `PATH` in a test.** Stripping every
+directory that contains `jq` also strips `/usr/bin`, which removes `git` on a
+Linux runner and silently hides every item with a git condition. Use
+`QUICKMENU_JSON` instead.
 
 ## Before you finish
 
